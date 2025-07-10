@@ -1,0 +1,40 @@
+name: compile-test
+on:
+  push:
+    branches: []
+env:
+    RUST_BACKTRACE: full
+    CARGO_TERM_COLOR: always
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  override: true             
+            - name: Install dependencies
+              run: cargo fetch
+            - name: Compile
+              run: cargo build
+            - name: Test
+              run: cargo test -- --test-threads=1                 
+    clippy:
+        name: Clippy
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@clippy
+            - run: cargo clippy --all-targets --all-features -- -D warnings       
+    outdated:
+        name: Outdated
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/install@cargo-outdated
+            - run: cargo outdated -w -R --exit-code 1   
