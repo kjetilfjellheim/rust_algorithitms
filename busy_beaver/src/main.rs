@@ -73,7 +73,7 @@ fn  main() {
     println!("Running Zany Zoo with {} programs", programs.len());
 
     let zany_zoo = ZanyZoo::new(programs);
-    let results = zany_zoo.run(1000);
+    let results = zany_zoo.run(11804926);
     for (index, result) in results.iter().enumerate() {
         println!("Program {}: Iterations: {}, Values: {}, Halted: {}", index + 1, result.iterations, result.values, result.halted);
         println!("Tape: {:?}", result.tape);
@@ -214,7 +214,7 @@ impl ZanyZoo {
                 eprintln!("Transition Not Found: {key:?} - {transition:?}");
             },
             BusyBeaverError::ProgramReadError { message } => {
-                eprintln!("Program Read Error: {}", message);
+                eprintln!("Program Read Error: {message}");
             },
         }
     }
