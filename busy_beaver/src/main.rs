@@ -2,7 +2,11 @@
  * Busy Beaver program in Rust.
  * Description: https://en.wikipedia.org/wiki/Busy_beaver
  */
-use std::{collections::HashMap, io::stdin, io::BufRead};
+mod config;
+
+use std::{collections::HashMap, io::Read};
+
+use config::Config;
 /**
  * State to halt program.
  */
@@ -63,22 +67,42 @@ enum BusyBeaverTransitionResult {
     Break
 }
 
+/**
+ * Main function to run the Busy Beaver program.
+ * It reads the configuration from stdin, initializes the Zany Zoo with the programs,
+ * and runs the Busy Beaver program for each program in the Zany Zoo.
+ */
 fn  main() {
-    let programs = stdin()
-        .lock()
-        .lines()
-        .map_while(Result::ok)
-        .collect::<Vec<String>>();
-
-    println!("Running Zany Zoo with {} programs", programs.len());
-
-    let zany_zoo = ZanyZoo::new(programs);
-    let results = zany_zoo.run(11804926);
+    let config = get_read_config();
+    println!("Running Zany Zoo with {} programs", config.programs.len());
+    let zany_zoo = ZanyZoo::new(config.programs);
+    let results = zany_zoo.run(config.max_iterations);
     for (index, result) in results.iter().enumerate() {
-        println!("Program {}: Iterations: {}, Values: {}, Halted: {}", index + 1, result.iterations, result.values, result.halted);
-        println!("Tape: {:?}", result.tape);
+        println!("Program {}: Iterations: {}, Values: {}, Halted: {}, Tape: {:?}", index + 1, result.iterations, result.values, result.halted, result.tape);
     }
-    println!("Total Programs: {}", results.len());
+    println!("Total halted programs: {}", results.len());
+}
+
+/**
+ * Reads the configuration from stdin and parses it as TOML.
+ * This is used to read the configuration for the Busy Beaver program.
+ * 
+ * The format must be:
+ * ```
+ * max_iterations = 100
+ * programs = [
+ *     "1RB1RZ_1LB0RC_1LC1LA",
+ *     "1RB1RZ_0LC0RC_1LC1LA"
+ * ]
+ * 
+ * # Returns
+ * A Config struct containing the maximum number of iterations and the programs to run.
+ */
+fn get_read_config() -> Config {
+    let mut config_str = String::new();
+    std::io::stdin().read_to_string(&mut config_str)
+        .expect("Failed to read from stdin");
+    toml::from_str(config_str.as_str()).expect("Failed to parse configuration")
 }
 
 /**
