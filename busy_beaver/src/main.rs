@@ -2,12 +2,18 @@
  * Busy Beaver program in Rust.
  * Description: https://en.wikipedia.org/wiki/Busy_beaver
  */
-
+use core::panic;
 use std::{collections::HashMap, io::stdin, io::BufRead};
 /**
  * State to halt program.
  */
 const HALTED: char = 'Z';
+
+/**
+ * Unspecified state, used to indicate that a transition does not specify a symbol or state.
+ * This is used in the transitions to indicate that there is no specific action for that transition.
+ */
+const UNSPECIFICED: char = '-';
 
 /**
  * Symbol and state types.
@@ -64,7 +70,7 @@ fn  main() {
     let programs = stdin()
         .lock()
         .lines()
-        .filter_map(Result::ok)
+        .map_while(Result::ok)
         .collect::<Vec<String>>();
 
     println!("Running Zany Zoo with {} programs", programs.len());
@@ -84,15 +90,15 @@ fn  main() {
 #[derive(Debug)]
 struct Transition {
     // The symbol to write on the tape
-    symbol: Symbol,
+    symbol: Option<Symbol>,
     // The state to transition to
-    state: State,
+    state: Option<State>,
     // The direction to move the tape head
-    direction: Direction,
+    direction: Option<Direction>,
 } 
 
 impl Transition {
-    /**
+    /**get_trans
      * Creates a new Transition instance.
      * 
      * # Arguments
@@ -103,7 +109,7 @@ impl Transition {
      * # Returns
      * A new instance of Transition.
      */
-    fn new(symbol: Symbol, state: State, direction: Direction) -> Self {
+    fn new(symbol: Option<Symbol>, state: Option<State>, direction: Option<Direction>) -> Self {
         Transition { symbol, state, direction }
     }
 }
@@ -176,14 +182,32 @@ impl ZanyZoo {
         let mut results: Vec<BusyBeaverResult> = Vec::new();
         for program_str in &self.programs {
             let parts: Vec<&str> = program_str.split("_").collect();
-            // We assume that the first state have the same length everywhere. 
-            let symbols = parts.first().unwrap_or(&"0").chars().count() / 3;
-            let states = parts.len();
-            let program = Self::prepare_program(parts, symbols, states);
+            let num_symbols = Self::get_number_of_states(&parts);
+            let num_states = parts.len();
+            let program = Self::prepare_program(parts, num_symbols, num_states);
             let busy_beaver = BusyBeaver::new(program);
             results.push(busy_beaver.run(max_iterations));    
         }
         results
+    }
+
+    /**
+     * Gets the number of states from the parts vector.
+     * This is calculated by taking the length of the first part and dividing it by 3,
+     * since each transition is represented by 3 characters (symbol, direction, state).
+     * 
+     * # Arguments
+     * `parts` - A vector of strings representing the Busy Beaver program.
+     * 
+     * # Returns
+     * The number of states in the program.
+     */
+    fn get_number_of_states(parts: &Vec<&str>) -> usize {
+        match parts.first() {
+            // Each transition is 3 characters long (symbol, direction, state)
+            Some(first_part) => first_part.len() / 3, 
+            None => panic!("No parts found in program string"),
+        }
     }
 
     /**
@@ -200,15 +224,14 @@ impl ZanyZoo {
      * Each ProgramKey is a combination of a symbol and a state, and each Transition contains
      * the symbol to write, the state to transition to, and the direction to move the
      */
-    fn prepare_program(parts: Vec<&str>, symbols: usize, states: usize) -> HashMap<ProgramKey, Transition> {
+    fn prepare_program(parts: Vec<&str>, num_symbols: usize, num_states: usize) -> HashMap<ProgramKey, Transition> {
         let mut program: HashMap<ProgramKey, Transition> = HashMap::new();
-        for symbol_index in 0..symbols {
-            for state_index in 0..states {
-                let state_key = STATES[state_index];
+        for symbol_index in 0..num_symbols {
+            for (state_index, state_key) in STATES.iter().enumerate().take(num_states) {
                 let transition_state = Self::get_transition_state(&parts, symbol_index, state_index);
                 let transition_symbol = Self::get_transition_symbol(&parts, symbol_index, state_index);
                 let transition_direction = Self::get_transition_direction(&parts, symbol_index, state_index);
-                program.insert(ProgramKey::new(symbol_index, state_key), Self::get_transition(transition_state, transition_symbol, transition_direction));                    
+                program.insert(ProgramKey::new(symbol_index, *state_key), Self::get_transition(transition_state, transition_symbol, transition_direction));                    
             }
         }
         program
@@ -226,7 +249,7 @@ impl ZanyZoo {
      * # Returns
      * The transition symbol as a char.
      */
-    fn get_transition_symbol(parts: &Vec<&str>, symbol_index: usize, state_index: usize) -> usize {
+    fn get_transition_symbol(parts: &Vec<&str>, symbol_index: usize, state_index: usize) -> Option<usize> {
         let part = match parts.get(state_index) {
             Some(state) => state,
             None => panic!("Invalid part"),
@@ -235,11 +258,14 @@ impl ZanyZoo {
             Some(value) => value,
             None => panic!("Invalid transition symbol"),
         };
+        if symbol_as_str == UNSPECIFICED {
+            return None;
+        }
         let symbol_value = match symbol_as_str.to_digit(10) {
             Some(value) => value as usize,
-            None => 0, // Default to 0 if conversion fails. Fix with option.
+            None => panic!("Invalid transition symbol"), 
         };
-        symbol_value
+        Some(symbol_value)
     }
 
     /**
@@ -254,16 +280,21 @@ impl ZanyZoo {
      * # Returns
      * The transition state as a char.
      */
-    fn get_transition_state(parts: &Vec<&str>, symbol_index: usize, state_index: usize) -> State {
+    fn get_transition_state(parts: &Vec<&str>, symbol_index: usize, state_index: usize) -> Option<State> {
         let part = match parts.get(state_index) {
             Some(state) => state,
             None => panic!("Invalid part"),
         };
-        let state_value = match part.chars().nth(symbol_index * 3 + 2) {
-            Some(value) => value,
-            None => '-', // Default to '-' if conversion fails. Fix with option.
-        };
-        state_value
+        match part.chars().nth(symbol_index * 3 + 2) {
+            Some(value) =>  { 
+                if value == UNSPECIFICED {
+                    return None; // If the state is '-', it means no transition.
+                }
+                Some(value) 
+            },
+            None => panic!("Invalid transition state"), 
+        }
+        
     }
 
     /**
@@ -278,16 +309,20 @@ impl ZanyZoo {
      * # Returns
      * The transition direction as a char.
      */
-    fn get_transition_direction(parts: &Vec<&str>, symbol_index: usize, state_index: usize) -> char {
+    fn get_transition_direction(parts: &Vec<&str>, symbol_index: usize, state_index: usize) ->  Option<char> {
         let part = match parts.get(state_index) {
             Some(state) => state,
             None => panic!("Invalid part"),
         };
-        let state_value = match part.chars().nth(symbol_index * 3 + 1) {
-            Some(value) => value,
-            None => 'L', // Default to 'L' if conversion fails. Fix with option.
-        };
-        state_value
+        match part.chars().nth(symbol_index * 3 + 1) {
+            Some(value) => { 
+                if value == UNSPECIFICED {
+                    return None; // If the direction is '-', it means no movement.
+                }
+                Some(value) 
+            },
+            None => panic!("Invalid transition direction"), 
+        }
     }    
 
     /**
@@ -301,17 +336,26 @@ impl ZanyZoo {
      * # Returns
      * A new instance of Transition.
      */
-    fn get_transition(transition_state: char, transition_symbol: usize, transition_direction: char) -> Transition {
-        let transition = Transition::new(
+    fn get_transition(transition_state: Option<char>, transition_symbol: Option<usize>, transition_direction: Option<char>) -> Transition {
+        let direction = match transition_direction {
+            Some(dir) => {
+                if dir == 'L' {
+                    Some(Direction::Left)
+                } else if dir == 'R' {
+                    Some(Direction::Right)
+                } else if dir == '-' {
+                    None 
+                } else {
+                    panic!("Invalid transition direction: {}", dir);
+                }
+            },
+            None => None, 
+        };
+        Transition::new(
             transition_symbol,
             transition_state,
-            match transition_direction {
-                'L' => Direction::Left,
-                'R' => Direction::Right,
-                _ => Direction::Left, // Default to Left if conversion fails. Fix with option.
-            },
-        );
-        transition
+            direction
+        )
     }    
 }
 
@@ -351,18 +395,18 @@ impl BusyBeaver {
     fn run(self, max_iterations: usize) -> BusyBeaverResult {
         let mut tape = vec![0; 2];
         let mut halted: bool = false;
-        let mut current_pos = 0 as usize;
+        let mut current_pos = 0_usize;
         let mut current_state: State = 'A';
-        let mut iteration = 0 as usize;
+        let mut iteration = 0_usize;
         for _iteration in 1..(max_iterations + 1) {
             iteration += 1;
-            let current_symbol = tape.get(current_pos).unwrap_or(&0).clone();
+            let current_symbol = *tape.get(current_pos).unwrap_or(&0);
             let transition = self.program.get(&ProgramKey::new(current_symbol, current_state));
             match Self::handle_transition(&mut tape, &mut halted, &mut current_pos, &mut current_state, transition) {
                 BusyBeaverTransitionResult::Continue => { },
                 BusyBeaverTransitionResult::Break => break,
                 BusyBeaverTransitionResult::Failed => {
-                    eprintln!("Transition failed at iteration {}", iteration);
+                    eprintln!("Transition failed at iteration {iteration}");
                     break;
                 }
             }
@@ -400,21 +444,32 @@ impl BusyBeaver {
                 // Ensure the tape has enough space. This is a special tape that can grow dynamically.
                 if *current_pos >= tape.len() {
                     tape.push(0); 
-                }
+                }                
                 // Write the transition symbol to the tape
-                tape[*current_pos] = transition.symbol.clone();
-                // Set the current state to the transition state
-                *current_state = transition.state.clone();      
-                // Check if the program has halted           
-                if Self::check_for_halt(halted, transition) {
-                    return BusyBeaverTransitionResult::Break;
-                }   
-                // Move the tape head left or right based on the transition direction
-                match transition.direction {
-                    Direction::Left => Self::move_tape_left(tape, current_pos),                  
-                    Direction::Right => Self::move_tape_right(tape, current_pos)
+                if let Some(symbol) = &transition.symbol {
+                    tape[*current_pos] = *symbol;
+                } else {
+                    panic!("Transition symbol is None");
                 }
-                              
+                // Set the current state to the transition state
+                if let Some(state) = &transition.state {
+                    *current_state = *state;      
+                    // Check if the program has halted           
+                    if Self::check_for_halt(halted, state) {
+                        return BusyBeaverTransitionResult::Break;
+                    }                      
+                } else {
+                    panic!("Transition state is None");
+                }                 
+                // Move the tape head left or right based on the transition direction
+                if let Some(direction) = &transition.direction {
+                    match direction {
+                        Direction::Left => Self::move_tape_left(tape, current_pos),                  
+                        Direction::Right => Self::move_tape_right(tape, current_pos)
+                    }
+                } else {
+                    panic!("Transition direction is None");
+                }                              
             },
             None => {
                 return BusyBeaverTransitionResult::Failed;
@@ -428,8 +483,8 @@ impl BusyBeaver {
      * If the transition state is HALTED, it sets the halted flag to true and returns a ControlFlow::Break.
      * Otherwise, it returns None.
      */
-    fn check_for_halt(halted: &mut bool, transition: &Transition) -> bool {
-        if transition.state == HALTED {
+    fn check_for_halt(halted: &mut bool, state: &State) -> bool {
+        if *state == HALTED {
             *halted = true;
             return true;
         }
@@ -442,7 +497,7 @@ impl BusyBeaver {
      * Otherwise, it decrements the current position.
      */
     fn move_tape_left(tape: &mut Vec<usize>, current_pos: &mut usize) {
-        if *current_pos <= 0 {
+        if *current_pos == 0 {
             tape.insert(0, 0);                             
         }  else {
             *current_pos -= 1;
@@ -497,13 +552,14 @@ impl BusyBeaverResult {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_busy_beaver_1x1_halted() {
         let mut program = HashMap::new();
-        program.insert(ProgramKey::new(0, 'A'), Transition::new(1, HALTED, Direction::Right));
+        program.insert(ProgramKey::new(0, 'A'), Transition::new(Some(1), Some(HALTED), Some(Direction::Right)));
         let bb = BusyBeaver::new(program);
         let result = bb.run(30);
         assert_eq!(result.iterations, 1);
@@ -514,7 +570,7 @@ mod test {
     #[test]
     fn test_busy_beaver_1x1_failed() {
         let mut program = HashMap::new();
-        program.insert(ProgramKey::new(0, 'A'), Transition::new(1, 'B', Direction::Right));
+        program.insert(ProgramKey::new(0, 'A'), Transition::new(Some(1), Some('B'), Some(Direction::Right)));
         let bb = BusyBeaver::new(program);
         let result = bb.run(30);
         assert_eq!(result.iterations, 2);
@@ -525,7 +581,7 @@ mod test {
     #[test]
     fn test_busy_beaver_1x1_continue_forever() {
         let mut program = HashMap::new();
-        program.insert(ProgramKey::new(0, 'A'), Transition::new(0, 'A', Direction::Right));
+        program.insert(ProgramKey::new(0, 'A'), Transition::new(Some(0), Some('A'), Some(Direction::Right)));
         let bb = BusyBeaver::new(program);
         let result = bb.run(30);
         assert_eq!(result.iterations, 30);
@@ -536,10 +592,10 @@ mod test {
     #[test]
     fn test_busy_beaver_2x2_halted() {
         let mut program = HashMap::new();
-        program.insert(ProgramKey::new(0, 'A'), Transition::new(1, 'B', Direction::Right));
-        program.insert(ProgramKey::new(0, 'B'), Transition::new(1, 'A', Direction::Left));
-        program.insert(ProgramKey::new(1, 'A'), Transition::new(1, 'B', Direction::Left));
-        program.insert(ProgramKey::new(1, 'B'), Transition::new(1, HALTED, Direction::Right));
+        program.insert(ProgramKey::new(0, 'A'), Transition::new(Some(1), Some('B'), Some(Direction::Right)));
+        program.insert(ProgramKey::new(0, 'B'), Transition::new(Some(1), Some('A'), Some(Direction::Left)));
+        program.insert(ProgramKey::new(1, 'A'), Transition::new(Some(1), Some('B'), Some(Direction::Left)));
+        program.insert(ProgramKey::new(1, 'B'), Transition::new(Some(1), Some(HALTED), Some(Direction::Right)));
         let bb = BusyBeaver::new(program);
         let result = bb.run(30);
         assert_eq!(result.iterations, 6);
@@ -550,12 +606,12 @@ mod test {
     #[test]
     fn test_busy_beaver_3x2_halted() {
         let mut program = HashMap::new();
-        program.insert(ProgramKey::new(0, 'A'), Transition::new(1, 'B', Direction::Right));
-        program.insert(ProgramKey::new(0, 'B'), Transition::new(1, 'B', Direction::Left));
-        program.insert(ProgramKey::new(0, 'C'), Transition::new(1, 'C', Direction::Left));
-        program.insert(ProgramKey::new(1, 'A'), Transition::new(1, HALTED, Direction::Right));
-        program.insert(ProgramKey::new(1, 'B'), Transition::new(0, 'C', Direction::Right));
-        program.insert(ProgramKey::new(1, 'C'), Transition::new(1, 'A', Direction::Left));
+        program.insert(ProgramKey::new(0, 'A'), Transition::new(Some(1), Some('B'), Some(Direction::Right)));
+        program.insert(ProgramKey::new(0, 'B'), Transition::new(Some(1), Some('B'), Some(Direction::Left)));
+        program.insert(ProgramKey::new(0, 'C'), Transition::new(Some(1), Some('C'), Some(Direction::Left)));
+        program.insert(ProgramKey::new(1, 'A'), Transition::new(Some(1), Some(HALTED), Some(Direction::Right)));
+        program.insert(ProgramKey::new(1, 'B'), Transition::new(Some(0), Some('C'),Some(Direction::Right)));
+        program.insert(ProgramKey::new(1, 'C'), Transition::new(Some(1), Some('A'), Some(Direction::Left)));
         let bb = BusyBeaver::new(program);
         let result = bb.run(30);
         assert_eq!(result.iterations, 21);
