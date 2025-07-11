@@ -28,7 +28,7 @@ jobs:
             cargo set-version ${VERSION#v}
       - name: Build apps
         run: cargo build --release     
-      - name: Upload apps binaries
+      - name: Upload busy-beaver binary
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -37,4 +37,12 @@ jobs:
           asset_path: ./target/release/busy_beaver
           asset_name: busy-beaver
           asset_content_type: application/octet-stream 
- 
+      - name: Upload aes binary
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: ./target/release/aes
+          asset_name: aesencrypt
+          asset_content_type: application/octet-stream 

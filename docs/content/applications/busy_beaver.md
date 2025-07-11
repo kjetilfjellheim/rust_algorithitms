@@ -20,7 +20,9 @@ programs = [
 ]
 ```
 ## Run
+```
 cat <Configuration file> | busy-beaver 
+```
 
 
 

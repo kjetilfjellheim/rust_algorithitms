@@ -31,7 +31,7 @@ pub struct AESBlock<State = DecryptedState> {
 /// the included data.
 ///
 pub struct AESData<State = DecryptedState> {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     state: std::marker::PhantomData<State>,
 }
 
