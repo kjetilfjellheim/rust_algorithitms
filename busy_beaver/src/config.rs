@@ -36,4 +36,3 @@ mod test {
         assert_eq!(config.programs[1], "1RB1RZ_0LC0RC_1LC1LA");
     }
 }
-
